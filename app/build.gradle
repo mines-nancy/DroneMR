@@ -81,5 +81,5 @@ dependencies {
 
     //ML Kit
     implementation 'com.google.mlkit:object-detection-custom:17.0.0'
-    implementation 'com.google.mlkit:pose-detection:18.0.0-beta3'
+    implementation 'com.google.mlkit:pose-detection-accurate:18.0.0-beta3'
 }
