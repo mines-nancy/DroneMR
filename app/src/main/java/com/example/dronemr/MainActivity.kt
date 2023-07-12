@@ -73,7 +73,6 @@ import org.json.JSONObject
 import org.json.JSONObject.NULL
 import java.io.File
 import java.io.IOException
-import java.util.Arrays
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -270,7 +269,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
             val drone = drone
             var latitude : Double = "0".toDouble()
             var longitude : Double = "0".toDouble()
-            var pos : LatLng = LatLng(latitude, longitude)
+            var pos = LatLng(latitude, longitude)
             if (drone == null) {
                 val myToast = Toast.makeText(this, "no drone connected", Toast.LENGTH_SHORT)
                 myToast.show()
@@ -311,6 +310,26 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
             }
         }
 
+        binding.appBarMain.removeCheckpointsAndPoI.setOnClickListener {
+
+            val markersSize = markers.lastIndex + 1
+            var pointOfInterestsSize = pointOfInterests.lastIndex + 1
+            markers.clear()
+            pointOfInterests.clear()
+            mMap.clear()
+            waypointList.clear()
+
+            if(markersSize > 0 || pointOfInterestsSize > 0) {
+
+
+                Toast.makeText(this, "$markersSize marker(s) and $pointOfInterestsSize point(s) of interest(s) removed", Toast.LENGTH_SHORT).show()
+            }
+            else {
+                Toast.makeText(this, "no point to remove", Toast.LENGTH_SHORT).show()
+            }
+
+
+        }
 
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
@@ -371,7 +390,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         // All references taken are linked to the activity lifecycle and
         // automatically closed at its destruction.
 
-        var sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
+        val sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
         team = sharedPref.getString("team", team).toString()
         auth = sharedPref.getString("auth", auth).toString()
         source = sharedPref.getString("source", source).toString()
@@ -632,11 +651,11 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                     //update data to send to server
                     position.put("latitude", location.latitude)
                     position.put("longitude", location.longitude)
-                    var sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
+                    val sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
                     val editor : SharedPreferences.Editor = sharedPref.edit()
                     editor.putFloat("latitude", location.latitude.toFloat())
                     editor.putFloat("longitude", location.longitude.toFloat())
-                    editor.commit()
+                    editor.apply()
                     droneInformation.put("position", position)
                     finalJSON.put("droneInformation", droneInformation)
                 }
@@ -1016,7 +1035,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         mMap.setOnInfoWindowClickListener(this)
         mMap.setOnMarkerDragListener(this)
         //mMap.setOnCameraIdleListener(this)
-        var sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
+        val sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
         val lat = sharedPref.getFloat("latitude", "0".toFloat()).toDouble()
         val long = sharedPref.getFloat("longitude", "0".toFloat()).toDouble()
         val pos = LatLng(lat, long)
@@ -1134,124 +1153,128 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
 
 
     private fun generateMission() {
-        if (isLeader) {
-            Toast.makeText(this, "Generating mavlink mission file...", Toast.LENGTH_SHORT).show()
-
-            val location = drone?.getInstrument(Gps::class.java)?.lastKnownLocation()
-
-            waypointList.clear()
-            missionList.clear()
-
-            for (marker in markers) {
-                waypointList.add(marker.position)
-            }
-            Toast.makeText(this, waypointList.toString(), Toast.LENGTH_SHORT).show()
-
-
-            missionList.add(
-                TakeOffCommand()
-
-            )
-
-            var currentPoIId: Int = -1
-
-            if (pointOfInterests.size > 0 && waypointList.size > 0) {
-                val poiId = getClosestPoIId(waypointList[0])
-                currentPoIId = poiId
-                missionList.add(
-                    SetRoiCommand(
-                        pointOfInterests[poiId].latitude,
-                        pointOfInterests[poiId].longitude,
-                        0.0
-                    )
-                )
-            }
-
-            missionList.add(
-                ChangeSpeedCommand(ChangeSpeedCommand.SpeedType.GROUND_SPEED, mSpeed)
-            )
-            waypointList.forEach { point ->
-                if (pointOfInterests.size > 0) {
-
-                    val PoIId = getClosestPoIId(point)
-                    if (currentPoIId != PoIId) {
-                        currentPoIId = PoIId
-                        missionList.add(
-                            SetRoiCommand(
-                                pointOfInterests[currentPoIId].latitude,
-                                pointOfInterests[currentPoIId].longitude,
-                                0.0
-                            )
-                        )
-                    }
-                }
-
-                missionList.add(
-                    NavigateToWaypointCommand(
-                        point.latitude,
-                        point.longitude,
-                        mAltitude,
-                        0.0,
-                        Companion.DEFAULT_HOLD_TIME,
-                        Companion.DEFAULT_ACCEPTANCE_RADIUS
-                    )
-                )
-            }
-
-
-            if (location != null) {
-                when (mFinishedAction) {
-                    "gohome" -> {
-
-
-                        missionList.add(ReturnToLaunchCommand())
-                        missionList.add(LandCommand())
-                    }
-
-                    "autoland" -> {
-
-                        missionList.add(LandCommand())
-                    }
-
-                    "none" -> {
-
-                    }
-
-                    "firstwaypoint" -> {
-
-                        missionList.add(missionList[2])
-                        missionList.add(LandCommand())
-                    }
-                }
-            }
-            val folder = getExternalFilesDir("flight_plan")
-            mavlinkFile = File(folder, "flight_plan.txt")
-
-            MavlinkFiles.generate(
-                mavlinkFile,
-                missionList,
-            )
-
-            missionControl = drone?.getPilotingItf(FlightPlanPilotingItf::class.java)!!
-            GlobalScope.launch {
-                sendMissionToDrone()
-            }
-
-            start.isEnabled = true
-            stop.isEnabled = true
-
+        if (drone == null) {
+            Toast.makeText(this, "No drone connected", Toast.LENGTH_SHORT).show()
         }
-
         else {
-            Toast.makeText(this, request.lastMessage.toString(), Toast.LENGTH_SHORT).show()
+            if (isLeader) {
+                Toast.makeText(this, "Generating mavlink mission file...", Toast.LENGTH_SHORT)
+                    .show()
 
+                val location = drone?.getInstrument(Gps::class.java)?.lastKnownLocation()
+
+                waypointList.clear()
+                missionList.clear()
+
+                for (marker in markers) {
+                    waypointList.add(marker.position)
+                }
+                Toast.makeText(this, waypointList.toString(), Toast.LENGTH_SHORT).show()
+
+
+                missionList.add(
+                    TakeOffCommand()
+
+                )
+
+                var currentPoIId: Int = -1
+
+                if (pointOfInterests.size > 0 && waypointList.size > 0) {
+                    val poiId = getClosestPoIId(waypointList[0])
+                    currentPoIId = poiId
+                    missionList.add(
+                        SetRoiCommand(
+                            pointOfInterests[poiId].latitude,
+                            pointOfInterests[poiId].longitude,
+                            0.0
+                        )
+                    )
+                }
+
+                missionList.add(
+                    ChangeSpeedCommand(ChangeSpeedCommand.SpeedType.GROUND_SPEED, mSpeed)
+                )
+                waypointList.forEach { point ->
+                    if (pointOfInterests.size > 0) {
+
+                        val PoIId = getClosestPoIId(point)
+                        if (currentPoIId != PoIId) {
+                            currentPoIId = PoIId
+                            missionList.add(
+                                SetRoiCommand(
+                                    pointOfInterests[currentPoIId].latitude,
+                                    pointOfInterests[currentPoIId].longitude,
+                                    0.0
+                                )
+                            )
+                        }
+                    }
+
+                    missionList.add(
+                        NavigateToWaypointCommand(
+                            point.latitude,
+                            point.longitude,
+                            mAltitude,
+                            0.0,
+                            Companion.DEFAULT_HOLD_TIME,
+                            Companion.DEFAULT_ACCEPTANCE_RADIUS
+                        )
+                    )
+                }
+
+
+                if (location != null) {
+                    when (mFinishedAction) {
+                        "gohome" -> {
+
+
+                            missionList.add(ReturnToLaunchCommand())
+                            missionList.add(LandCommand())
+                        }
+
+                        "autoland" -> {
+
+                            missionList.add(LandCommand())
+                        }
+
+                        "none" -> {
+
+                        }
+
+                        "firstwaypoint" -> {
+
+                            missionList.add(missionList[2])
+                            missionList.add(LandCommand())
+                        }
+                    }
+                }
+                val folder = getExternalFilesDir("flight_plan")
+                mavlinkFile = File(folder, "flight_plan.txt")
+
+                MavlinkFiles.generate(
+                    mavlinkFile,
+                    missionList,
+                )
+
+                missionControl = drone?.getPilotingItf(FlightPlanPilotingItf::class.java)!!
+                GlobalScope.launch {
+                    sendMissionToDrone()
+                }
+
+                start.isEnabled = true
+                stop.isEnabled = true
+
+            } else {
+                Toast.makeText(this, request.lastMessage.toString(), Toast.LENGTH_SHORT).show()
+
+            }
         }
     }
 
     private fun getClosestPoIId(point: LatLng) : Int {
         var minIndex = 0
         var mindist = distance(point, pointOfInterests[0])
-        pointOfInterests.forEachIndexed() { index, PoI ->
+        pointOfInterests.forEachIndexed { index, PoI ->
             val dist =  distance(point, PoI)
             if(dist < mindist){
                 minIndex = index
@@ -1280,7 +1303,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
 
         return yaw
     }
-    private suspend fun sendMissionToDrone() {
+    private fun sendMissionToDrone() {
             missionControl.clearRecoveryInfo()
             missionControl.uploadFlightPlan(mavlinkFile, "new_plan")
 
@@ -1409,13 +1432,13 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 identification.put("auth",auth)
                 identification.put("source", source)
                 generate.isEnabled = true
-                var sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
+                val sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
                 val editor : SharedPreferences.Editor = sharedPref.edit()
                 editor.putString("team", team)
                 editor.putString("auth", auth)
                 editor.putString("source", source)
                 editor.putString("serverUrl", serverUrl)
-                editor.commit()
+                editor.apply()
 
                 Toast.makeText(this, "Finished configuring mission settings", Toast.LENGTH_SHORT).show()
             }
@@ -1461,7 +1484,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 editor.putString("auth", auth)
                 editor.putString("source", source)
                 editor.putString("serverUrl", serverUrl)
-                editor.commit()
+                editor.apply()
 
                 Toast.makeText(this, "Finished configuring mission settings", Toast.LENGTH_SHORT).show()
 
@@ -1477,17 +1500,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
             .setNegativeButton("Cancel") { dialog, _ -> dialog.cancel() }
             .create()
             .show()
-
-
-
     }
-    fun videoShowing() : Boolean {
-        if(videoFragment != null && videoFragment.isResumed) {
-            return true
-        }
-        return false
-    }
-
 
 
 

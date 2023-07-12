@@ -3,11 +3,9 @@ package com.example.dronemr.ui.slideshow
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Bundle
-import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -31,25 +29,23 @@ import com.google.mlkit.vision.pose.Pose
 import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.PoseDetector
 import com.google.mlkit.vision.pose.PoseLandmark
-import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
+import com.google.mlkit.vision.pose.accurate.AccuratePoseDetectorOptions
 import com.parrot.drone.groundsdk.Ref
-import com.parrot.drone.groundsdk.UnstableApi
+//import com.parrot.drone.groundsdk.UnstableApi
 import com.parrot.drone.groundsdk.device.Drone
 import com.parrot.drone.groundsdk.device.peripheral.MainCamera
 import com.parrot.drone.groundsdk.device.peripheral.StreamServer
 import com.parrot.drone.groundsdk.device.peripheral.camera.*
 import com.parrot.drone.groundsdk.device.peripheral.stream.CameraLive
 import com.parrot.drone.groundsdk.stream.GsdkStreamView
-import com.parrot.drone.groundsdk.stream.RawVideoSink
-import com.parrot.drone.groundsdk.stream.RawVideoSink.Companion.config
-import com.parrot.drone.groundsdk.stream.Stream.Sink
-import com.parrot.drone.groundsdk.stream.Stream.Sink.Config
-import com.parrot.drone.groundsdk.stream.VideoFormat
+//import com.parrot.drone.groundsdk.stream.RawVideoSink
+//import com.parrot.drone.groundsdk.stream.RawVideoSink.Companion.config
+//import com.parrot.drone.groundsdk.stream.Stream.Sink
+//import com.parrot.drone.groundsdk.stream.Stream.Sink.Config
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.nio.Buffer
 import kotlin.math.abs
 import kotlin.math.atan2
 
@@ -79,6 +75,7 @@ class SlideshowFragment : Fragment() {
 
 
 
+    /**
     /** Video sink */
     @OptIn(UnstableApi::class)
     private lateinit var streamSink: Sink
@@ -87,6 +84,7 @@ class SlideshowFragment : Fragment() {
 
     @OptIn(UnstableApi::class)
     private lateinit var callback: RawVideoSink.Callback
+    */
 
     /** Reference on MainCamera peripheral. */
     private var cameraRef: Ref<MainCamera>? = null
@@ -126,7 +124,6 @@ class SlideshowFragment : Fragment() {
     private lateinit var minusButton: Button
 
 
-    @OptIn(UnstableApi::class)
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -143,7 +140,7 @@ class SlideshowFragment : Fragment() {
         val textView: TextView = binding.textSlideshow
 
         streamView = root.findViewById(R.id.stream_view)
-        streamView?.paddingFill = GsdkStreamView.PADDING_FILL_BLUR_CROP
+        streamView.paddingFill = GsdkStreamView.PADDING_FILL_BLUR_CROP
 
 
         recordButton = root.findViewById(R.id.record_button)
@@ -160,7 +157,7 @@ class SlideshowFragment : Fragment() {
             textView.text = "drone non connecté"
         }
 
-        if (mainActivity?.drone != null) {
+        if (mainActivity.drone != null) {
             startVideoStream()
             recordButton.setOnClickListener {
                 toggleStartStopRecord(mainActivity.drone!!)
@@ -176,12 +173,10 @@ class SlideshowFragment : Fragment() {
                         isObjectDetecting = true
 
                         startObjectDetection()
-
                     }
-
                 }
-
             }
+
             detectPoseButton.setOnClickListener {
                 MainScope().launch {
                     if (isPoseDetecting) {
@@ -197,6 +192,7 @@ class SlideshowFragment : Fragment() {
         } else {
             recordButton.isEnabled = false
             detectObjectButton.isEnabled = false
+            detectPoseButton.isEnabled = false
         }
 
         plusButton.setOnClickListener {
@@ -216,11 +212,10 @@ class SlideshowFragment : Fragment() {
 
 
 
-        looper = Looper.getMainLooper()
-        callback = StreamCallBack(mainActivity)
-        callback = StreamCallBack(mainActivity)
+        // looper = Looper.getMainLooper()
+        //callback = StreamCallBack(mainActivity)
 
-        sinkConfig = config(looper, callback)
+        //sinkConfig = config(looper, callback)
 
         dronesDetectedPosition = JSONObject()
 
@@ -232,10 +227,15 @@ class SlideshowFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+
         isObjectDetecting = false
         isPoseDetecting = false
+
         objectDetectionImageView.visibility = View.GONE
         poseDetectionImageView.visibility = View.GONE
+
+        streamView.visibility = View.GONE
+
         _binding = null
     }
 
@@ -243,7 +243,7 @@ class SlideshowFragment : Fragment() {
         // Monitor the stream server.
 
         streamServerRef =
-            mainActivity?.drone?.getPeripheral(StreamServer::class.java) { streamServer ->
+            mainActivity.drone?.getPeripheral(StreamServer::class.java) { streamServer ->
                 // Called when the stream server is available and when it changes.
                 val textView: TextView = binding.textSlideshow
                 slideshowViewModel.text.observe(viewLifecycleOwner) {
@@ -363,8 +363,8 @@ class SlideshowFragment : Fragment() {
             // or .setUri(URI to model file)
             .build()
 
-        val poseDetectionOptions = PoseDetectorOptions.Builder()
-            .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
+        val poseDetectionOptions = AccuratePoseDetectorOptions.Builder()
+            .setDetectorMode(AccuratePoseDetectorOptions.STREAM_MODE)
             .build()
 
 
@@ -399,7 +399,7 @@ class SlideshowFragment : Fragment() {
                     .map { obj ->
                         var text = "Unknown"
                         var label = ""
-                        var id = obj.trackingId
+                        val id = obj.trackingId
                         // We will show the top confident detection result if it exist
                         if (obj.labels.isNotEmpty()) {
                             val firstLabel = obj.labels.first()
@@ -420,12 +420,16 @@ class SlideshowFragment : Fragment() {
                     }
 
                 // Draw the detection result on the input bitmap
-                objectDetectionBitmap = drawDetectionResult(bitmap, detectedObjects)
+                if (isObjectDetecting) {
+                    objectDetectionBitmap = drawDetectionResult(bitmap, detectedObjects)
 
-                // Show the detection result on the app screen
+                    // Show the detection result on the app screen
 
-                mainActivity.runOnUiThread {
-                    objectDetectionImageView.setImageBitmap(objectDetectionBitmap)
+                    mainActivity.runOnUiThread {
+                        if (isObjectDetecting) {
+                            objectDetectionImageView.setImageBitmap(objectDetectionBitmap)
+                        }
+                    }
                 }
 
 
@@ -446,25 +450,32 @@ class SlideshowFragment : Fragment() {
     private fun runPoseDetection(bitmap: Bitmap) {
         val image = InputImage.fromBitmap(bitmap, 0)
 
-        poseDetector.process(image)
-            .addOnSuccessListener { pose ->
-                // Task completed successfully
-                // ...
-                poseDetectionBitmap = drawPoseResult(bitmap, pose)
+        if (isPoseDetecting) {
+            poseDetector.process(image)
+                .addOnSuccessListener { pose ->
+                    // Task completed successfully
+                    // ...
+
+                    if (isPoseDetecting) {
+                        poseDetectionBitmap = drawPoseResult(bitmap, pose)
 
 
-                mainActivity.runOnUiThread {
-                    poseDetectionImageView.setImageBitmap(poseDetectionBitmap)
+                        mainActivity.runOnUiThread {
+                            if (isPoseDetecting) {
+                                poseDetectionImageView.setImageBitmap(poseDetectionBitmap)
+                            }
+                        }
+                    }
+
+
                 }
-
-            }
-            .addOnFailureListener {
-                val myToast =
-                    Toast.makeText(mainActivity, it.message.toString(), Toast.LENGTH_SHORT)
-                myToast.show()
-                Log.e(TAG, it.message.toString())
-
-            }
+                .addOnFailureListener {
+                    val myToast =
+                        Toast.makeText(mainActivity, it.message.toString(), Toast.LENGTH_SHORT)
+                    myToast.show()
+                    Log.e(TAG, it.message.toString())
+                }
+        }
 
     }
 
@@ -486,23 +497,23 @@ class SlideshowFragment : Fragment() {
 
     private suspend fun startObjectDetection() {
         while (isObjectDetecting) {
-            delay(100L)
             streamView.capture {
                 if (it != null) {
                     runObjectDetection(it)
                 }
             }
+            delay(100L)
         }
     }
 
     private suspend fun startPoseDetection() {
         while(isPoseDetecting) {
-            delay(100L)
             streamView.capture {
-                if (it != null){
+                if (it != null) {
                     runPoseDetection(it)
                 }
             }
+            delay(100L)
         }
     }
 
@@ -519,7 +530,7 @@ class SlideshowFragment : Fragment() {
             bitmap.width, bitmap.height,
             Bitmap.Config.ARGB_8888
         )
-        var canvas = Canvas(mTransparentBackground)
+        val canvas = Canvas(mTransparentBackground)
         val pen = Paint()
         pen.textAlign = Paint.Align.LEFT
 
@@ -565,7 +576,7 @@ class SlideshowFragment : Fragment() {
             Bitmap.Config.ARGB_8888
         )
 
-        var canvas = Canvas(mTransparentBackground)
+        val canvas = Canvas(mTransparentBackground)
         val pen = Paint()
         pen.textAlign = Paint.Align.LEFT
         pen.color = Color.RED
@@ -657,7 +668,7 @@ class SlideshowFragment : Fragment() {
         pen.getTextBounds( detectedPose, 0, detectedPose.length, tagSize)
 
         if(detectedPose != "") {
-            var margin = 10
+            val margin = 10
             if(leftHip!!.position3D.x > rightHip!!.position3D.x) {
                 canvas.drawText(
                     detectedPose, leftHip.position3D.x + margin,
@@ -745,6 +756,7 @@ class SlideshowFragment : Fragment() {
      */
     data class BoxWithText(val box: Rect, val text: String)
 
+   /**
     @OptIn(UnstableApi::class)
     class StreamCallBack(activity: MainActivity) : RawVideoSink.Callback {
 
@@ -796,4 +808,5 @@ class SlideshowFragment : Fragment() {
         }
 
     }
+    */
 }
