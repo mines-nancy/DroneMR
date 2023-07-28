@@ -1,4 +1,4 @@
-package com.example.dronemr.ui.slideshow
+package com.example.dronemr.ui.verticalCamera
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -18,7 +18,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.dronemr.MainActivity
 import com.example.dronemr.R
-import com.example.dronemr.databinding.FragmentSlideshowBinding
+import com.example.dronemr.databinding.FragmentVerticalCameraBinding
 import com.google.mlkit.common.model.LocalModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.DetectedObject
@@ -35,7 +35,6 @@ import com.parrot.drone.groundsdk.Ref
 import com.parrot.drone.groundsdk.device.Drone
 import com.parrot.drone.groundsdk.device.peripheral.MainCamera
 import com.parrot.drone.groundsdk.device.peripheral.StreamServer
-import com.parrot.drone.groundsdk.device.peripheral.camera.*
 import com.parrot.drone.groundsdk.device.peripheral.stream.CameraLive
 import com.parrot.drone.groundsdk.stream.GsdkStreamView
 //import com.parrot.drone.groundsdk.stream.RawVideoSink
@@ -50,7 +49,7 @@ import kotlin.math.abs
 import kotlin.math.atan2
 
 
-class SlideshowFragment : Fragment() {
+class VerticalCameraFragment : Fragment() {
     companion object {
         const val TAG = "MLKit-ODT"
         const val REQUEST_IMAGE_CAPTURE: Int = 1
@@ -58,7 +57,7 @@ class SlideshowFragment : Fragment() {
     }
 
 
-    private var _binding: FragmentSlideshowBinding? = null
+    private var _binding: FragmentVerticalCameraBinding? = null
 
     // This property is only valid between onCreateView and
     // onDestroyView.
@@ -72,6 +71,7 @@ class SlideshowFragment : Fragment() {
 
     /** Current drone live stream. */
     private var liveStream: CameraLive? = null
+    //private var displayedCamera: CameraLive.Source = CameraLive.Source.FRONT_CAMERA
 
 
 
@@ -89,7 +89,7 @@ class SlideshowFragment : Fragment() {
     /** Reference on MainCamera peripheral. */
     private var cameraRef: Ref<MainCamera>? = null
 
-    private lateinit var slideshowViewModel: SlideshowViewModel
+    private lateinit var verticalCameraViewModel: VerticalCameraViewModel
 
     // User interface:
     /** Video stream view. */
@@ -129,15 +129,15 @@ class SlideshowFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        slideshowViewModel =
-            ViewModelProvider(this)[SlideshowViewModel::class.java]
+        verticalCameraViewModel =
+            ViewModelProvider(this)[VerticalCameraViewModel::class.java]
 
         mainActivity = activity as MainActivity
 
-        _binding = FragmentSlideshowBinding.inflate(inflater, container, false)
+        _binding = FragmentVerticalCameraBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
-        val textView: TextView = binding.textSlideshow
+        val textView: TextView = binding.textVerticalCamera
 
         streamView = root.findViewById(R.id.stream_view)
         streamView.paddingFill = GsdkStreamView.PADDING_FILL_BLUR_CROP
@@ -153,12 +153,42 @@ class SlideshowFragment : Fragment() {
         plusButton = root.findViewById(R.id.plus_button)
         minusButton = root.findViewById(R.id.minus_button)
 
-        slideshowViewModel.text.observe(viewLifecycleOwner) {
+        /**
+        val displayedCameraRadioGroup = root.findViewById<View>(R.id.displayedCamera) as RadioGroup
+        displayedCameraRadioGroup.setOnCheckedChangeListener { _, checkedId -> // set the action after finishing the mission
+            Log.d(com.example.dronemr.TAG, "Select finish action")
+            when (checkedId) {
+                R.id.front_camera -> {
+                    //displayedCamera = CameraLive.Source.FRONT_CAMERA
+                    liveStreamRef?.close()
+                    liveStreamRef = null
+                    // Stop rendering the stream
+                    streamView.setStream(null)
+                    startVideoStream(CameraLive.Source.FRONT_CAMERA)
+                }
+
+                R.id.vertical_camera -> {
+                    //displayedCamera = CameraLive.Source.VERTICAL_CAMERA
+                    liveStreamRef?.close()
+                    liveStreamRef = null
+                    // Stop rendering the stream
+                    streamView.setStream(null)
+                    startVideoStream(CameraLive.Source.VERTICAL_CAMERA)
+                }
+            }
+
+
+        }
+
+        //displayedCameraRadioGroup.check(R.id.front_camera)
+        */
+
+        verticalCameraViewModel.text.observe(viewLifecycleOwner) {
             textView.text = "drone non connecté"
         }
 
         if (mainActivity.drone != null) {
-            startVideoStream()
+            startVideoStream(CameraLive.Source.VERTICAL_CAMERA)
             recordButton.setOnClickListener {
                 toggleStartStopRecord(mainActivity.drone!!)
             }
@@ -239,14 +269,14 @@ class SlideshowFragment : Fragment() {
         _binding = null
     }
 
-    private fun startVideoStream() {
+    private fun startVideoStream( source: CameraLive.Source) {
         // Monitor the stream server.
 
         streamServerRef =
             mainActivity.drone?.getPeripheral(StreamServer::class.java) { streamServer ->
                 // Called when the stream server is available and when it changes.
-                val textView: TextView = binding.textSlideshow
-                slideshowViewModel.text.observe(viewLifecycleOwner) {
+                val textView: TextView = binding.textVerticalCamera
+                verticalCameraViewModel.text.observe(viewLifecycleOwner) {
                     textView.text = "caméra"
                 }
 
@@ -258,7 +288,7 @@ class SlideshowFragment : Fragment() {
 
                     // Monitor the live stream.
                     if (liveStreamRef == null) {
-                        liveStreamRef = live { stream ->
+                        liveStreamRef = live(source) { stream ->
                             // Called when the live stream is available and when it changes.
 
                             if (stream != null) {
@@ -728,7 +758,7 @@ class SlideshowFragment : Fragment() {
 
     }
 
-    fun getAngle(firstPoint: PoseLandmark, midPoint: PoseLandmark, lastPoint: PoseLandmark): Double {
+    private fun getAngle(firstPoint: PoseLandmark, midPoint: PoseLandmark, lastPoint: PoseLandmark): Double {
         var result = Math.toDegrees(
             (atan2(
                 lastPoint.position.y - midPoint.position.y,

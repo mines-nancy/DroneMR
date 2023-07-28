@@ -7,14 +7,14 @@
         <item
             android:id="@+id/nav_home"
             android:icon="@drawable/baseline_map_24"
-            android:title="@string/menu_home" />
+            android:title="@string/menu_map" />
         <item
             android:id="@+id/nav_gallery"
             android:icon="@drawable/ic_menu_gallery"
-            android:title="@string/menu_gallery" />
+            android:title="@string/menu_main_camera" />
         <item
             android:id="@+id/nav_camera"
             android:icon="@drawable/ic_menu_slideshow"
-            android:title="@string/menu_slideshow" />
+            android:title="@string/menu_vertical_camera" />
     </group>
 </menu>

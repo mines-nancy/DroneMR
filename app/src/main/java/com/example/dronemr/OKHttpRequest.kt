@@ -18,6 +18,8 @@ import okhttp3.Response
 import java.io.IOException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
+import okhttp3.Headers
+import okhttp3.Headers.Companion.toHeaders
 import org.json.JSONObject
 
 
@@ -63,7 +65,9 @@ class OkHttpRequest(client: OkHttpClient, mainActivity: MainActivity) {
 
                 mainActivity.runOnUiThread {
                     lastMessage = response.body!!.string()
+                    //Toast.makeText(mainActivity, lastMessage, Toast.LENGTH_SHORT).show()
                 }
+
             } else {
                 println("Erreur .+lors de l'envoi du JSON au serveur: ${response.code}")
             }
@@ -112,8 +116,6 @@ class OkHttpRequest(client: OkHttpClient, mainActivity: MainActivity) {
             .post(jsonMessage.toRequestBody(MEDIA_TYPE_MARKDOWN))
             .build()
 
-
-
         withContext(IO) {
 
             val response = client.newCall(request).execute()
@@ -144,7 +146,7 @@ class OkHttpRequest(client: OkHttpClient, mainActivity: MainActivity) {
     }
 
     companion object {
-        val MEDIA_TYPE_MARKDOWN = "text/x-markdown; charset=utf-8".toMediaType()
+        val MEDIA_TYPE_MARKDOWN = "application/json; charset=utf-8".toMediaType()
     }
 
 

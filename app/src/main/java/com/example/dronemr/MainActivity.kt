@@ -51,8 +51,10 @@ import com.parrot.drone.groundsdk.device.instrument.Gps
 import com.parrot.drone.groundsdk.device.peripheral.ObstacleAvoidance
 import com.parrot.drone.groundsdk.device.pilotingitf.Activable
 import com.parrot.drone.groundsdk.device.pilotingitf.FlightPlanPilotingItf
+import com.parrot.drone.groundsdk.device.pilotingitf.GuidedPilotingItf
+import com.parrot.drone.groundsdk.device.pilotingitf.GuidedPilotingItf.Directive.Speed
+import com.parrot.drone.groundsdk.device.pilotingitf.GuidedPilotingItf.RelativeMoveDirective
 import com.parrot.drone.groundsdk.device.pilotingitf.ManualCopterPilotingItf
-import com.parrot.drone.groundsdk.device.pilotingitf.PointOfInterestPilotingItf
 import com.parrot.drone.groundsdk.facility.AutoConnection
 import com.parrot.drone.groundsdk.mavlink.ChangeSpeedCommand
 import com.parrot.drone.groundsdk.mavlink.LandCommand
@@ -68,11 +70,16 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.ConnectionSpec
+import okhttp3.OkHttp
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import org.json.JSONObject.NULL
 import java.io.File
 import java.io.IOException
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -179,17 +186,22 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
     private lateinit var missionControl : FlightPlanPilotingItf
     private var pointOfInterests = mutableListOf<LatLng>()
 
-    /** Point Of Interest Piloting Interface */
-    private lateinit var PoIPilotingItf: PointOfInterestPilotingItf
+    /** Guided Piloting Interface */
+    private lateinit var guidedPilotingItf: GuidedPilotingItf
+    private var guidedPilotingItfRef: Ref<GuidedPilotingItf>? = null
+
     /**Http connection */
     private lateinit var client : OkHttpClient
     private lateinit var request : OkHttpRequest
+    private lateinit var headingCommandRequest : OkHttpRequest
+    private lateinit var moveCommandRequest : OkHttpRequest
+    private lateinit var currentHeadingRequest : OkHttpRequest
 
     /**Camera option to follow drone */
     private var followingDrone : Boolean = false
 
     /**JSON to send position to server*/
-    private lateinit var droneInformation: JSONObject
+    lateinit var droneInformation: JSONObject
     //message type
     private var messageType: String = "init"
     //drone type
@@ -206,7 +218,8 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
     private lateinit var detection: JSONObject
     //command
     private lateinit var command: JSONObject
-    private var serverUrl: String = "https://webhook.site/1305b1e0-295a-4fe2-8f0e-d2a853fdb8a9"
+    var serverUrl: String = "https://webhook.site/1305b1e0-295a-4fe2-8f0e-d2a853fdb8a9"
+    private var serverQuery: String = "/init"
 
 
 
@@ -227,6 +240,44 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
     private var isLeader = true
     private lateinit var leaderButton: MenuItem
     private lateinit var slaveButton: MenuItem
+
+    /**server configuration */
+    private val trustAllCertificates: Array<TrustManager> = arrayOf(
+        object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {
+            }
+
+            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {
+            }
+
+            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> {
+                return arrayOf()
+            }
+        }
+    )
+
+    private val trustAllCertificatesObject = object : X509TrustManager {
+        override fun checkClientTrusted(
+            chain: Array<java.security.cert.X509Certificate>?,
+            authType: String?
+        ) {
+        }
+
+        override fun checkServerTrusted(
+            chain: Array<java.security.cert.X509Certificate>?,
+            authType: String?
+        ) {
+        }
+
+        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> {
+            return arrayOf()
+        }
+    }
+
+
+            // Initialize an SSLContext with the custom TrustManager
+    val sslContext: SSLContext = SSLContext.getInstance("TLS")
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -313,7 +364,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         binding.appBarMain.removeCheckpointsAndPoI.setOnClickListener {
 
             val markersSize = markers.lastIndex + 1
-            var pointOfInterestsSize = pointOfInterests.lastIndex + 1
+            val pointOfInterestsSize = pointOfInterests.lastIndex + 1
             markers.clear()
             pointOfInterests.clear()
             mMap.clear()
@@ -428,6 +479,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         finalJSON.put("timestamp", System.currentTimeMillis())
 
         //initial request
+        sslContext.init(null, trustAllCertificates, java.security.SecureRandom())
         client = OkHttpClient.Builder()
             .connectionSpecs(
                 listOf<ConnectionSpec>(
@@ -436,9 +488,14 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                     ConnectionSpec.CLEARTEXT,
                 )
             )
+            .hostnameVerifier { _, _ -> true }
+            .sslSocketFactory(sslContext.socketFactory, trustAllCertificatesObject)
             .build()
 
         request = OkHttpRequest(client, this)
+        headingCommandRequest = OkHttpRequest(client, this)
+        moveCommandRequest = OkHttpRequest(client, this)
+        currentHeadingRequest = OkHttpRequest(client, this)
 
         //handler
         mHandler = Handler(mainLooper)
@@ -473,19 +530,10 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                     drone = it.drone
                     if (drone != null) {
                         startDroneMonitors()
-
-                        /**
-                        MainScope().launch {
-                            var initSucess = false
-                            while (!initSucess) {
-                                finalJSON.put("timestamp", System.currentTimeMillis())
-                                sendLocationToServer(finalJSON.toString(), serverUrl)
-                            }
-                        }
-                        */
                         /** Enable obstacle avoidance mode*/
                         //obstacleAvoidance = drone!!.getPeripheral(ObstacleAvoidance::class.java)!!
                         //obstacleAvoidance.preferredMode().value = ObstacleAvoidance.Mode.STANDARD
+                        //guidedPilotingItf = drone!!.getPilotingItf(GuidedPilotingItf::class.java)!!
 
                     }
                 }
@@ -527,10 +575,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         monitorDroneCompass()
         //send data
         startSending()
-        //Get data
-        //startGetting()
-        //Check for command if slave
-        monitorCommands()
+
         //allow access to gallery and camera view
         /**
         galleryButton.isEnabled = true
@@ -572,6 +617,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
     /**
      * Monitors current drone battery charge level.
      */
+
     private fun monitorDroneBatteryChargeLevel() {
         // Monitor the battery info instrument.
         droneBatteryInfoRef = drone?.getInstrument(BatteryInfo::class.java) {
@@ -584,16 +630,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         }
     }
 
-    private fun monitorCommands() {
-        MainScope().launch {
-                while(drone !== null){
-                delay(3000L)
-                //if (request.lastMessage == "zoom"){
-                //    Toast.makeText(baseContext, "asked for zoom", Toast.LENGTH_SHORT).show()
-                //}
-            }
-        }
-    }
+
 
     /**
      * Monitor current drone state.
@@ -781,6 +818,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 // Piloting interface is active.
 
                 when {
+
                     itf.canTakeOff() -> {
                         // Drone can take off.
                         takeOffLandBt.isEnabled = true
@@ -793,6 +831,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                         takeOffLandBt.isEnabled = true
                         takeOffLandBt.text = "Land"
                     }
+
 
                     else -> // Disable the button.
                         takeOffLandBt.isEnabled = false
@@ -809,7 +848,6 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         droneStateTxt.text = DeviceState.ConnectionState.DISCONNECTED.toString()
         droneBatteryTxt.text = ""
         takeOffLandBt.isEnabled = false
-
     }
 
     /**
@@ -1079,7 +1117,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         TODO("Not yet implemented")
     }
 
-    private fun sendMessageToServer(jsonMessage: String, url : String) {
+    fun sendMessageToServer(jsonMessage: String, url : String) {
         try {
 
             request.sendMessage(jsonMessage, url)
@@ -1090,7 +1128,9 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
 
     private fun getDataFromServer(url: String) {
         try {
-            request.getData(url)
+            headingCommandRequest.getData(url.plus("/headingCommand/").plus(source))
+            moveCommandRequest.getData(url.plus("/moveCommand/").plus(source))
+
         } catch (e: IOException){
             println(e)
         }
@@ -1100,12 +1140,13 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         // starting a coroutine
         MainScope().launch {
             var initSuccess = false
+            var startedGetting = false
             while (drone != null) {
                 if (!initSuccess) {
                     while (!initSuccess && drone != null) {
                         finalJSON.put("timestamp", System.currentTimeMillis())
 
-                        sendMessageToServer(finalJSON.toString(), serverUrl)
+                        sendMessageToServer(finalJSON.toString(), serverUrl.plus(serverQuery))
                         delay(2000L)
                         //initSuccess = true
 
@@ -1125,28 +1166,68 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                                     .show()
                             }
                             */
+
                             initSuccess = true
                         }
                     }
                 }
-                delay(2000L)
+                delay(500L)
+                serverQuery = "/position"
+                if(!startedGetting){
+                    //Get data
+                    startGetting()
+                    startedGetting = true
+                }
                 messageType = "position"
                 droneInformation.put("messageType", messageType)
                 finalJSON.put("droneInformation", droneInformation)
                 finalJSON.put("timestamp", System.currentTimeMillis())
-                sendMessageToServer(finalJSON.toString(), serverUrl)
+                sendMessageToServer(finalJSON.toString(), serverUrl.plus(serverQuery).plus("/").plus(source))
 
             }
         }
     }
 
+    @SuppressLint("Range")
     private fun startGetting() {
-
         GlobalScope.launch {
             while (drone !== null) {
-                delay(2000L)
-                getDataFromServer(serverUrl)
-                //sendLocationToServer(positionJSON.toString(), serverUrl)
+                if(!isLeader) {
+                    delay(500L)
+                    getDataFromServer(serverUrl)
+                    //sendLocationToServer(positionJSON.toString(), serverUrl)
+
+                    runOnUiThread {
+                        var rightDirective = 0
+                        var forwardDirective = 0
+                        if(moveCommandRequest.lastMessage != ""){
+                            val moveCommand = JSONObject(moveCommandRequest.lastMessage)
+                            rightDirective = moveCommand.getInt("rightDirective")
+                            forwardDirective = moveCommand.getInt("forwardDirective")
+                        }
+                        if(abs(headingCommandRequest.lastMessage.toDouble()) > 40 || rightDirective != 0 || forwardDirective != 0) {
+
+                            guidedPilotingItf =
+                                drone?.getPilotingItf(GuidedPilotingItf::class.java)!!
+                            if(guidedPilotingItf.state == Activable.State.IDLE) {
+                                val speed = Speed(0.1, 0.1, 0.02)
+                                val moveDirective = RelativeMoveDirective(
+                                    forwardDirective.toDouble(),
+                                    rightDirective.toDouble(),
+                                    0.0,
+                                    headingCommandRequest.lastMessage.toDouble()/2,
+                                    speed
+                                )
+                                guidedPilotingItf.move(moveDirective)
+                            }
+
+                            //}
+                        }
+
+                        //guidedPilotingItf.move(moveDirective)
+                    }
+
+                }
             }
         }
     }
@@ -1265,7 +1346,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 stop.isEnabled = true
 
             } else {
-                Toast.makeText(this, request.lastMessage.toString(), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, request.lastMessage, Toast.LENGTH_SHORT).show()
 
             }
         }
@@ -1273,12 +1354,12 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
 
     private fun getClosestPoIId(point: LatLng) : Int {
         var minIndex = 0
-        var mindist = distance(point, pointOfInterests[0])
+        var minDist = distance(point, pointOfInterests[0])
         pointOfInterests.forEachIndexed { index, PoI ->
             val dist =  distance(point, PoI)
-            if(dist < mindist){
+            if(dist < minDist){
                 minIndex = index
-                mindist = dist
+                minDist = dist
             }
         }
         return minIndex
@@ -1303,6 +1384,8 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
 
         return yaw
     }
+
+
     private fun sendMissionToDrone() {
             missionControl.clearRecoveryInfo()
             missionControl.uploadFlightPlan(mavlinkFile, "new_plan")

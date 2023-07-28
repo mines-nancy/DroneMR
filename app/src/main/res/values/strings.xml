@@ -9,7 +9,7 @@
     <string name="leader">Leader</string>
     <string name="slave">Slave</string>
 
-    <string name="menu_home">Home</string>
-    <string name="menu_gallery">Gallery</string>
-    <string name="menu_slideshow">Camera</string>
+    <string name="menu_map">Map</string>
+    <string name="menu_main_camera">Main Camera</string>
+    <string name="menu_vertical_camera">Vertical Camera</string>
 </resources>
