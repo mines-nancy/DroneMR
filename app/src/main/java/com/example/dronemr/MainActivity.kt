@@ -70,7 +70,6 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.ConnectionSpec
-import okhttp3.OkHttp
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import org.json.JSONObject.NULL
@@ -187,8 +186,8 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
     private var pointOfInterests = mutableListOf<LatLng>()
 
     /** Guided Piloting Interface */
-    private lateinit var guidedPilotingItf: GuidedPilotingItf
-    private var guidedPilotingItfRef: Ref<GuidedPilotingItf>? = null
+    private lateinit var copterPilotingItf: ManualCopterPilotingItf
+    private var copterPilotingItfRef: Ref<ManualCopterPilotingItf>? = null
 
     /**Http connection */
     private lateinit var client : OkHttpClient
@@ -823,8 +822,8 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                         // Drone can take off.
                         takeOffLandBt.isEnabled = true
                         takeOffLandBt.text = "Take Off"
-
                     }
+
 
                     itf.canLand() -> {
                         // Drone can land.
@@ -1207,9 +1206,12 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                         }
                         if(abs(headingCommandRequest.lastMessage.toDouble()) > 40 || rightDirective != 0 || forwardDirective != 0) {
 
-                            guidedPilotingItf =
-                                drone?.getPilotingItf(GuidedPilotingItf::class.java)!!
-                            if(guidedPilotingItf.state == Activable.State.IDLE) {
+                            copterPilotingItf =
+                                drone?.getPilotingItf(ManualCopterPilotingItf::class.java)!!
+                            val activated = copterPilotingItf.activate()
+                            Toast.makeText(baseContext, activated.toString(), Toast.LENGTH_SHORT).show()
+                            if(copterPilotingItf.state == Activable.State.IDLE) {
+                                /**
                                 val speed = Speed(0.1, 0.1, 0.02)
                                 val moveDirective = RelativeMoveDirective(
                                     forwardDirective.toDouble(),
@@ -1218,7 +1220,9 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                                     headingCommandRequest.lastMessage.toDouble()/2,
                                     speed
                                 )
-                                guidedPilotingItf.move(moveDirective)
+                                */
+                                copterPilotingItf.setPitch(10*forwardDirective)
+                                copterPilotingItf.setRoll(10*rightDirective)
                             }
 
                             //}
