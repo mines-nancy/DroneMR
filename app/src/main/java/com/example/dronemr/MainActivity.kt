@@ -211,6 +211,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
     private var team: String = "Mines Nancy"
     private var auth: String = "egtj-3jqa-z6fh-ete7-wrml"
     private var source: String = "3_AIR_DRONE-PATROLLER"
+    private var color: String = "red"
     //position
     private lateinit var position: JSONObject
 
@@ -445,6 +446,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         team = sharedPref.getString("team", team).toString()
         auth = sharedPref.getString("auth", auth).toString()
         source = sharedPref.getString("source", source).toString()
+        color = sharedPref.getString("color", color).toString()
         serverUrl = sharedPref.getString("serverUrl", serverUrl).toString()
 
         //create finalJSON
@@ -462,6 +464,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         identification.put("team", team)
         identification.put("auth",auth)
         identification.put("source", source)
+        identification.put("color", color)
         droneInformation.put("identification", identification)
 
         //add position
@@ -1514,6 +1517,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 identification.put("team", team)
                 identification.put("auth",auth)
                 identification.put("source", source)
+                identification.put("color", color)
                 generate.isEnabled = true
                 val sharedPref : SharedPreferences = getSharedPreferences("CoHoMaPrefs", Context.MODE_PRIVATE)
                 val editor : SharedPreferences.Editor = sharedPref.edit()
@@ -1545,6 +1549,9 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
         val sourceEditText = slaveSettings.findViewById<View>(R.id.source) as EditText
         sourceEditText.setText(source)
 
+        val colorEditText = slaveSettings.findViewById<View>(R.id.color) as EditText
+        colorEditText.setText(color)
+
         val serverUrlEditText = slaveSettings.findViewById<View>(R.id.serverUrl) as EditText
         serverUrlEditText.setText(serverUrl)
 
@@ -1556,6 +1563,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 team = nameEditText.text.toString()
                 auth = authEditText.text.toString()
                 source = sourceEditText.text.toString()
+                color = colorEditText.text.toString()
                 serverUrl = serverUrlEditText.text.toString()
                 Log.e(TAG, "altitude $mAltitude")
                 Log.e(TAG, "speed $mSpeed")
@@ -1566,6 +1574,7 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
                 editor.putString("team", team)
                 editor.putString("auth", auth)
                 editor.putString("source", source)
+                editor.putString("color", color)
                 editor.putString("serverUrl", serverUrl)
                 editor.apply()
 

@@ -108,6 +108,27 @@
             android:hint="3_AIR_DRONE-PATROLLER"
             android:textAlignment="center"></EditText>
     </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="10dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginLeft="10dp"
+        android:layout_marginRight="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="color:"></TextView>
+
+        <EditText
+            android:id="@+id/color"
+            android:layout_width="324dp"
+            android:layout_height="50dp"
+            android:hint="red"
+            android:textAlignment="center"></EditText>
+    </LinearLayout>
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

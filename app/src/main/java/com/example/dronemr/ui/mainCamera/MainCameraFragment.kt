@@ -197,6 +197,7 @@ class MainCameraFragment : Fragment() {
                 MainScope().launch {
                     if (isObjectDetecting) {
                         isObjectDetecting = false
+
                         objectDetectionImageView.visibility = View.GONE
                     } else {
                         objectDetectionImageView.visibility = View.VISIBLE
@@ -211,6 +212,18 @@ class MainCameraFragment : Fragment() {
                 MainScope().launch {
                     if (isPoseDetecting) {
                         isPoseDetecting = false
+                        val finalJSON = JSONObject()
+                        val dronePos = JSONObject()
+                        dronePos.put("x", 0.5)
+                        dronePos.put("y", 0.5)
+                        Toast.makeText(mainActivity, dronePos.toString()  , Toast.LENGTH_SHORT)
+                        dronesDetectedPosition.put("dronePos_${id}", dronePos)
+                        mainActivity.droneInformation.put("messageType", "detection")
+                        finalJSON.put("droneInformation", mainActivity.droneInformation)
+                        finalJSON.put("detectedPositions", dronesDetectedPosition)
+                        MainScope().launch {
+                            mainActivity.sendMessageToServer(finalJSON.toString(), mainActivity.serverUrl.plus("/detection"))
+                        }
                         poseDetectionImageView.visibility = View.GONE
                     } else {
                         poseDetectionImageView.visibility = View.VISIBLE
@@ -432,6 +445,7 @@ class MainCameraFragment : Fragment() {
                 debugPrint(it)
                 // Parse ML Kit's DetectedObject and create corresponding visualization data for
                 // wanted labels
+                var anafiDetected = false
                 val detectedObjects = it
                     .map { obj ->
                         var text = "Unknown"
@@ -459,11 +473,25 @@ class MainCameraFragment : Fragment() {
                             MainScope().launch {
                                 mainActivity.sendMessageToServer(finalJSON.toString(), mainActivity.serverUrl.plus("/detection"))
                             }
+                            anafiDetected = true
                         }
-
-
                         BoxWithText(obj.boundingBox, text)
                     }
+
+                if(!anafiDetected) {
+                    val dronePos = JSONObject()
+                    dronePos.put("x", 0.5)
+                    dronePos.put("y", 0.5)
+                    Toast.makeText(mainActivity, dronePos.toString()  , Toast.LENGTH_SHORT)
+                    dronesDetectedPosition.put("dronePos_${id}", dronePos)
+                    mainActivity.droneInformation.put("messageType", "detection")
+                    finalJSON.put("droneInformation", mainActivity.droneInformation)
+                    finalJSON.put("detectedPositions", dronesDetectedPosition)
+                    MainScope().launch {
+                        mainActivity.sendMessageToServer(finalJSON.toString(), mainActivity.serverUrl.plus("/detection"))
+                    }
+
+                }
 
                 // Draw the detection result on the input bitmap
                 if (isObjectDetecting) {
