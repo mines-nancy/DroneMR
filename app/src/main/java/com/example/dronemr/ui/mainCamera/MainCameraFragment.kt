@@ -45,6 +45,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.atan2
 
@@ -471,7 +472,15 @@ class MainCameraFragment : Fragment() {
                             finalJSON.put("droneInformation", mainActivity.droneInformation)
                             finalJSON.put("detectedPositions", dronesDetectedPosition)
                             MainScope().launch {
-                                mainActivity.sendMessageToServer(finalJSON.toString(), mainActivity.serverUrl.plus("/detection"))
+                                try {
+                                    mainActivity.sendMessageToServer(
+                                        finalJSON.toString(),
+                                        mainActivity.serverUrl.plus("/detection")
+                                    )
+                                }
+                                catch (e: IOException) {
+                                    println(e)
+                                }
                             }
                             anafiDetected = true
                         }

@@ -1122,7 +1122,6 @@ GoogleMap.OnMapLongClickListener, GoogleMap.OnCameraIdleListener, OnMapReadyCall
 
     fun sendMessageToServer(jsonMessage: String, url : String) {
         try {
-
             request.sendMessage(jsonMessage, url)
         } catch(e : IOException){
             println(e)
