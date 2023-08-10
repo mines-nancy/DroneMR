@@ -400,9 +400,9 @@ class MainCameraFragment : Fragment() {
     private fun buildModel() {
         val localModel = LocalModel.Builder()
             //.setAssetFilePath("lite-model_object_detection_mobile_object_labeler_v1_1.tflite")
-            //.setAssetFilePath("model_anafi.tflite")
+            .setAssetFilePath("model_anafi.tflite")
             //.setAssetFilePath("v5s640-fp16.tflite")
-            .setAssetFilePath("redbluemodel.tflite")
+            //.setAssetFilePath("redbluemodel.tflite")
             // or .setAbsoluteFilePath(absolute file path to model file)
             // or .setUri(URI to model file)
             .build()
